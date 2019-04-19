@@ -5,24 +5,18 @@ import random
 
 app = Flask(__name__)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
-# создаём словарь, в котором ключ — название города, а значение — массив,
-# где перечислены id картинок, которые мы записали в прошлом пункте.
-# cities = {
-#     'москва': [
-#         '1540737/daa6e420d33102bf6947', '213044/7df73ae4cc715175059e'
-#     ],
-#     'нью-йорк': [
-#         '1652229/728d5c86707054d4745f', '1030494/aca7ed7acefde2606bdc'
-#     ],
-#     'париж': [
-#         '1652229/f77136c2364eb90a3ea8', '3450494/aca7ed7acefde22341bdc'
-#     ]
-# }
 
-# создаём словарь, где для каждого пользователя мы будем хранить его имя
 sessionStorage = {}
+
+
+def log():
+    logging.debug('Debug')
+    logging.info('Info')
+    logging.warning('Warning')
+    logging.error('Error')
+    logging.critical('Critical or Fatal')
 
 
 @app.route('/post', methods=['POST'])
@@ -71,15 +65,16 @@ def handle_dialog(res, req):
                           + '. Я - Алиса. Вы хотите куда-нибудь полететь?'
             # получаем варианты buttons из ключей нашего словаря cities
             # res['response']['buttons'] = [
-            res['response'][
-                'text'] = req['request']['original_utterance'].lower()
+            log()
             if req['request']['original_utterance'].lower() in [
                 'да',
                 'хочу',
             ]:
+                log()
+                print('i am here')
                 # Пользователь согласился, прощаемся.
-                res['response']['text'] = 'Слона можно найти на Яндекс.Маркете!'
-                res['response']['end_session'] = True
+                res['response']['text'] = 'А куда именно?'
+
                 return
 
     # если мы знакомы с пользователем и он нам что-то написал,
