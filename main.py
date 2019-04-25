@@ -1,7 +1,33 @@
 from flask import Flask, request
 import logging
 import json
-import random
+
+from api import get_avia,get_avia_cheap,get_iata, test
+
+class User:
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
+        self.decidedToBuy = False
+        self.fromCity = None
+        self.toCity = None
+        self.directionSelected = False
+        self.fromDate = None
+        self.toDate = None
+        self.dateSelected = False
+
+    def isDecidedToBuy(self):
+        return self.decidedToBuy
+
+    def get_name(self):
+        return self.name
+
+    def setFromTo(self, fromCity, toCity):
+        self.fromCity = fromCity
+        self.toCity = toCity
+        self.directionSelected = True
+
+user = None
 
 app = Flask(__name__)
 
@@ -10,6 +36,38 @@ logging.basicConfig(level=logging.DEBUG)
 
 sessionStorage = {}
 
+# def get_avia_cheap(city_origin_code, city_destination_code, date):
+#     try:
+#         date = '2019'+'-'+ str(date)
+#         print('get avia')
+#         # url, по которому доступно API Яндекс.Карт
+#         url = "http://api.travelpayouts.com/v1/prices/direct"
+#         # параметры запроса
+#         params = {
+#             # город, координаты которого мы ищем
+#             'origin': city_origin_code,
+#             # формат ответа от сервера, в данном случае JSON
+#             'destination': city_destination_code,
+#             'depart_date': date,
+#             'token': '3adecc4f29fece71a7d27292750887d2',
+#             'format': 'json'
+#         }
+#         # отправляем запрос
+#         response = requests.get(url, params)
+#         # получаем JSON ответа
+#         json = response.json()
+#         # получаем координаты города (там написаны долгота(longitude),
+#         # широта(latitude) через пробел).
+#         # Посмотреть подробное описание JSON-ответа можно
+#         # в документации по адресу
+#         # https://tech.yandex.ru/maps/geocoder/
+#         avia = json['success'][1]['data']['HKT'][0]
+#         # Превращаем string в список, так как точка -
+#         # это пара двух чисел - координат
+
+#         return avia
+#     except Exception as e:
+#         return e
 
 def log():
     logging.debug('Debug')
@@ -35,21 +93,19 @@ def main():
 
 
 def handle_dialog(res, req):
+    global user
     user_id = req['session']['user_id']
 
     # если пользователь новый, то просим его представиться.
     if req['session']['new']:
         res['response']['text'] = 'Привет! Назови свое имя!'
         # созда\м словарь в который в будущем положим имя пользователя
-        sessionStorage[user_id] = {
-            'first_name': None
-        }
         return
 
     # если пользователь не новый, то попадаем сюда.
     # если поле имени пустое, то это говорит о том,
     # что пользователь ещё не представился.
-    if sessionStorage[user_id]['first_name'] is None:
+    if user is None:
         # в последнем его сообщение ищем имя.
         first_name = get_first_name(req)
         # если не нашли, то сообщаем пользователю что не расслышали.
@@ -59,53 +115,73 @@ def handle_dialog(res, req):
         # если нашли, то приветствуем пользователя.
         # И спрашиваем какой город он хочет увидеть.
         else:
-            sessionStorage[user_id]['first_name'] = first_name
+            user = User(user_id, first_name)
             res['response'][
                 'text'] = 'Приятно познакомиться, ' + first_name.title() \
                           + '. Я - Алиса. Вы хотите куда-нибудь полететь?'
             # получаем варианты buttons из ключей нашего словаря cities
             # res['response']['buttons'] = [
             log()
-            if req['request']['original_utterance'].lower() in [
-                'да',
-                'хочу',
-            ]:
-                log()
-                print('i am here')
-                # Пользователь согласился, прощаемся.
-                res['response']['text'] = 'А куда именно?'
-
-                return
 
     # если мы знакомы с пользователем и он нам что-то написал,
     # то это говорит о том, что он уже говорит о городе, что хочет увидеть.
-    # else:
-    #     # ищем город в сообщение от пользователя
-    #     city = get_city(req)
-    #     # если этот город среди известных нам,
-    #     # то показываем его (выбираем одну из двух картинок случайно)
-    #     if city in cities:
-    #         res['response']['card'] = {}
-    #         res['response']['card']['type'] = 'BigImage'
-    #         res['response']['card']['title'] = 'Этот город я знаю.'
-    #         res['response']['card']['image_id'] = random.choice(
-    #             cities[city])
-    #         res['response']['text'] = 'Я угадал!'
-    #     # если не нашел, то отвечает пользователю
-    #     # 'Первый раз слышу об этом городе.'
-    #     else:
-    #         res['response']['text'] = \
-    #             'Первый раз слышу об этом городе. Попробуй еще разок!'
+    else:
+        if req['request']['original_utterance'].lower() in [
+            'да',
+            'хочу',
+        ]:
+            user.decidedToBuy = True
+            res['response']['text'] = 'Назовите город вылета и город назначения'
 
+        elif user.decidedToBuy:
+            if req['request']['original_utterance'].lower() in [
+                'нет',
+                'не хочу',
+            ]:
+                res['response']['text'] = 'Хорошо, обращайтесь, если запланируете поездку!'
+            elif not user.directionSelected:
+                cities = get_city(req)
 
+                print(cities)
+
+                if len(cities) == 1:
+                    res['response']['text'] = 'Ты написал только город назначения'
+                if len(cities) == 2:
+                    user.setFromTo(cities[0], cities[1])
+                    res['response']['text'] = 'Назовите дату вылета'
+                elif len(cities) > 2:
+                    res['response']['text'] = 'Слишком много городов!'
+            elif user.directionSelected:
+                if get_date(req) != None:
+                    res['response']['text'] = 'Вам нужны дешевые авивабилеты?Если да, то напишите "дешевые", если нет, то "не дешевые"'
+                    date = get_date(req)
+                    user.fromDate = date
+                elif req['request']['original_utterance'].lower() == 'не дешевые':
+                    city_origin_code = get_iata(city_origin)
+                    city_destination_code = get_iata(city_destination)
+                    avia = get_avia(city_origin_code, city_destination_code, date)
+                    res['response']['text'] = avia[5] + avia[6] + avia[7]
+                elif req['request']['original_utterance'].lower() == 'дешевые':
+                    print('cheap')
+                    # city_origin_code = get_iata(user.fromCity)
+                    city_origin_code = 'MOW'
+                    print(user.fromCity)
+                    print(city_origin_code)
+                    city_destination_code = 'LON'
+                    test()
+                    # city_destination_code = get_iata(user.toCity)
+                    avia = get_avia_cheap(city_origin_code, city_destination_code, user.fromDate)
+                    print(avia)
+                    res['response']['text'] = 'sdf'
+        else:
+            res['response']['text'] = 'Хорошо, обращайтесь, если запланируете поездку!'
 def get_city(req):
-    # перебираем именованные сущности
+    cities = []
     for entity in req['request']['nlu']['entities']:
-        # если тип YANDEX.GEO то пытаемся получить город(city),
-        # если нет то возвращаем None
         if entity['type'] == 'YANDEX.GEO':
-            # возвращаем None, если не нашли сущности с типом YANDEX.GEO
-            return entity['value'].get('city', None)
+            if 'city' in entity['value']:
+                cities.append(entity['value']['city'])
+    return cities
 
 
 def get_first_name(req):
@@ -118,6 +194,11 @@ def get_first_name(req):
             # Во всех остальных случаях возвращаем None.
             return entity['value'].get('first_name', None)
 
+def get_date(req):
+    for entity in req['request']['nlu']['entities']:
+        # находим сущность с типом 'YANDEX.DATETIME
+        if entity['type'] == 'YANDEX.DATETIME':
+            return entity['value'].get('month', None)
 
 if __name__ == '__main__':
     app.run()
