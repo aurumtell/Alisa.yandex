@@ -4,6 +4,7 @@ import json
 
 from api import get_avia,get_avia_cheap,get_iata
 
+
 class User:
     def __init__(self, id, name):
         self.id = id
@@ -26,6 +27,7 @@ class User:
         self.fromCity = fromCity
         self.toCity = toCity
         self.directionSelected = True
+
 
 user = None
 
@@ -86,10 +88,18 @@ def handle_dialog(res, req):
             user = User(user_id, first_name)
             res['response'][
                 'text'] = 'Приятно познакомиться, ' + first_name.title() \
-                          + '. Я - Алиса. Вы хотите куда-нибудь полететь?'
+                          + '. Я - Алиса. Вы хотите куда-нибудь полететь?Пишите "Хочу билет"'
             # res['response']['buttons'] = ['yes','sd']
             # получаем варианты buttons из ключей нашего словаря cities
-            # res['response']['buttons'] = [
+            res['response']['buttons'] = [{
+                'title': 'да',
+                'hide': True
+                },
+                {
+                'title': 'хочу',
+                'hide': True
+                }]
+
             log()
 
     # если мы знакомы с пользователем и он нам что-то написал,
@@ -98,6 +108,7 @@ def handle_dialog(res, req):
         if req['request']['original_utterance'].lower() in [
             'да',
             'хочу',
+            'хочу билет'
         ]:
             user.decidedToBuy = True
             res['response']['text'] = 'Назовите город вылета и город назначения'
@@ -121,21 +132,42 @@ def handle_dialog(res, req):
                 elif len(cities) > 2:
                     res['response']['text'] = 'Слишком много городов!'
             elif user.directionSelected:
-                if get_date(req) != None:
-                    res['response']['text'] = 'Вам нужны дешевые авивабилеты?Если да, то напишите "дешевые", если нет, то "не дешевые"'
+                if get_date(req) is not None:
+                    res['response']['text'] = 'Вам нужны дешевые авивабилеты?Если да, то напишите "дешевые", ' \
+                                              'если нет, то "не дешевые" '
+                    res['response']['buttons'] = [{
+                        'title': 'дешевые',
+                        'hide': True
+                        },
+                        {
+                        'title': 'не дешевые',
+                        'hide': True
+                        }]
                     date = get_date(req)
                     user.fromDate = date
                 elif req['request']['original_utterance'].lower() == 'не дешевые':
                     city_origin_code, city_destination_code = get_iata(user.fromCity, user.toCity)
-                    avia = get_avia(city_origin_code, city_destination_code, date)
+                    avia = get_avia(city_origin_code, city_destination_code, user.fromDate)
                     res['response']['text'] = 'дата вылета:'+avia[0][4]+' '+'количество пересадок:' + avia[0][6]+' '+'цена:' + avia[0][7]
+                    res['response']['buttons'] = [{
+                        'title': 'покупай!',
+                        'hide': True,
+                        'url': 'http://www.aviasales.ru/?search=multi&marker=УкажитеЗдесьВашМаркер'
+                        }]
                 elif req['request']['original_utterance'].lower() == 'дешевые':
                     print('cheap')
                     city_origin_code, city_destination_code = get_iata(user.fromCity, user.toCity)
                     avia = get_avia_cheap(city_origin_code, city_destination_code, user.fromDate)
                     res['response']['text'] = 'цена:'+avia[0]+' '+'номер рейса:' + avia[2]+' '+'дата вылета:' + avia[3]
+                    res['response']['buttons'] = [{
+                        'title': 'покупай!',
+                        'hide': True,
+                        'url': 'http://www.aviasales.ru/?search=multi&marker=УкажитеЗдесьВашМаркер'
+                        }]
         else:
             res['response']['text'] = 'Хорошо, обращайтесь, если запланируете поездку!'
+
+
 def get_city(req):
     cities = []
     for entity in req['request']['nlu']['entities']:
@@ -155,11 +187,13 @@ def get_first_name(req):
             # Во всех остальных случаях возвращаем None.
             return entity['value'].get('first_name', None)
 
+
 def get_date(req):
     for entity in req['request']['nlu']['entities']:
         # находим сущность с типом 'YANDEX.DATETIME
         if entity['type'] == 'YANDEX.DATETIME':
             return entity['value'].get('month', None), entity['value'].get('day', None)
+
 
 if __name__ == '__main__':
     app.run()

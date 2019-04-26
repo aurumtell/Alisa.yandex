@@ -37,6 +37,7 @@ def get_avia_cheap(city_origin_code, city_destination_code, date):
     except Exception as e:
         return e
 
+
 def get_avia(city_origin_code, city_destination_code, date):
     try:
         if date[0] < 10:
